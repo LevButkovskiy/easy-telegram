@@ -1,16 +1,27 @@
 import TelegramBot from "node-telegram-bot-api"
 import parseCommand from "./utils/parseCommand"
 
-export function SimpleBot(token, commands = {}) {
+let callbacks = []
+function SimpleBot(token, commands = {}) {
 	const bot = new TelegramBot(token, {polling: true})
 
 	bot.on("message", (msg) => {
 		console.log("msg", msg)
-		const reply = (text) => {
+		const reply = async (text, ...props) => {
 			try {
-				bot.sendMessage(msg.chat.id, text).catch((e) => {
+				console.log("props", props)
+
+				const res = await bot.sendMessage(msg.chat.id, text, ...props).catch((e) => {
 					console.error("reply error", e.toString())
 					bot.sendMessage(msg.chat.id, `Произошла ошибка ${e?.toString()}`)
+				})
+				// const json = await res.json()
+				console.log("res", res)
+				props.forEach((prop) => {
+					console.log("prop", prop)
+					const keyboard = JSON.parse(prop?.reply_markup)?.inline_keyboard.flat(2)
+					console.log("keyboard", keyboard)
+					keyboard.map((e) => callbacks.push({msgId: res.message_id, func: e.func}))
 				})
 			} catch (e) {
 				console.error("reply error", e)
@@ -36,6 +47,7 @@ export function SimpleBot(token, commands = {}) {
 
 				if (!commands[name]) return reply("Команда не найдена. Список всех команд /help")
 
+				console.log("command", command)
 				return command.func ? command.func(msg, args, reply) : reply(command.description || "Команда не настроена")
 			}
 
@@ -45,4 +57,19 @@ export function SimpleBot(token, commands = {}) {
 			reply(`Произошла ошибка ${e?.toString()}`)
 		}
 	})
+	bot.call
+	bot.on("callback_query", (msg) => {
+		console.log("callback", msg)
+		console.log(callbacks)
+		const callback = callbacks.find((callback) => callback.msgId === msg?.message?.message_id)
+		console.log("callback func", callback)
+		if (!callback) return
+		callback.func(msg.data)
+	})
 }
+
+SimpleBot.MarkupContsrtuctor = {
+	InlineKeyboard: (args) => ({reply_markup: {inline_keyboard: args}}),
+}
+
+export default SimpleBot
